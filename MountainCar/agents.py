@@ -17,7 +17,7 @@ class QLearningAgent:
         # Initialize agent's Q(s,a) model
         self.model = RBFRegressionModel(env, use_sklearn=use_sklearn)
 
-    def play(self, env, epsilon=0.3, gamma=0.9, max_steps=2000, render=False):
+    def play(self, env, epsilon=0.3, gamma=0.9, max_steps=10000, render=False):
         """ 
         Play one episode of CartPole
         
