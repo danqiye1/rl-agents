@@ -10,7 +10,7 @@ class QLearningAgent:
     def __init__(self, env, use_sklearn=False):
         """ Constructor 
         
-        :param env: OpenAI gym cartpole environment
+        :param env: OpenAI gym MountainCar environment
         :param use_sklearn: Use Scikit-Learn SGD regressor if True, use CustomSGDRegressor if False
         """
 
@@ -19,7 +19,7 @@ class QLearningAgent:
 
     def play(self, env, epsilon=0.3, gamma=0.9, max_steps=10000, render=False):
         """ 
-        Play one episode of CartPole
+        Play one episode of MountainCar
         
         :param env: OpenAI gym environment to play on
         :param epsilon: Parameter for epsilon greedy algorithm which determines the explore-exploit selection

@@ -25,7 +25,7 @@ class RBFRegressionModel:
     """
     Classic single layer RBF Linear Regression Model
     """
-    def __init__(self, env, use_sklearn=False, dim=20000):
+    def __init__(self, env, use_sklearn=False):
         """
         Constructor for RBF Linear Regression Model
 
@@ -47,10 +47,10 @@ class RBFRegressionModel:
 
         # Initialize featurizer and scaler
         self.featurizer = FeatureUnion([
-            ("rbf1", RBFSampler(gamma=5.0, n_components=1000)),
-            ("rbf2", RBFSampler(gamma=2.0, n_components=1000)),
-            ("rbf3", RBFSampler(gamma=1.0, n_components=1000)),
-            ("rbf4", RBFSampler(gamma=0.5, n_components=1000))
+            ("rbf1", RBFSampler(gamma=5.0, n_components=500)),
+            ("rbf2", RBFSampler(gamma=2.0, n_components=500)),
+            ("rbf3", RBFSampler(gamma=1.0, n_components=500)),
+            ("rbf4", RBFSampler(gamma=0.5, n_components=500))
         ])
         
 
