@@ -6,10 +6,27 @@ This package is a set of RL agents that are specifically built to solve classic 
 2. MountainCar
 
 ## Installation
-To use the packages in your python virtual environment, simply install it using pip:
+To use the agent packages in your python virtual environment, simply activate your virtual environment install it using pip:
 
 ```bash
 pip install .
 ```
 
-Note that this do not automatically install the dependency libraries, since it is easy to do with pip or conda, and writing it in setup.py will force people to use the pip distribution.
+or pipenv:
+
+```bash
+pipenv install .
+```
+
+## Usage
+After installation, RL agents can be imported and experimented on:
+
+```python
+import gym
+from CartPole.agents import QLearningAgent
+
+env = gym.make("CartPole-v0")
+agent = QLearningAgent(env)
+```
+
+For more examples of how to train and test the agent, see the `Simulation` folder

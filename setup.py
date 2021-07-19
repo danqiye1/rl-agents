@@ -16,5 +16,10 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     packages=setuptools.find_packages(),
+    install_requires=[
+        "numpy",
+        "scikit-learn",
+        "matplotlib"
+    ],
     python_requires=">=3.9",
 )
