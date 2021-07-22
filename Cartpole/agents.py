@@ -1,9 +1,14 @@
 """
 A set of agents for solving the OpenAI Cartpole Environment
 """
+import torch
 import numpy as np
 from matplotlib import pyplot as plt
-from Cartpole.models import RBFRegressionModel
+from torch import optim
+from torch.distributions import Categorical
+from Cartpole.models import RBFRegressionModel, PolicyModel
+
+from pdb import set_trace as bp
 
 class QLearningAgent:
     """ A Q Learning Agent """
@@ -79,3 +84,139 @@ class QLearningAgent:
             # Select action from policy pi(a|s)
             return np.argmax(self.model.predict(s))
 
+class PolicyGradientAgent:
+    """ Agent that learns using Policy Gradient Method """
+
+    def __init__(self, env, policy_model=None, value_model=None, optimizer=None, lr=0.1):
+        """ Constructor 
+        
+        :param env: Environment object with same interface as OpenAI gym CartPole
+        :param policy_model: Function approximation model that gives pi(a|s)
+        :param value_model: Function apporximation model that gives Q(s, a)
+        """
+
+        # Attach or create policy model pi(a|s)
+        if policy_model:
+            self.policy_model = policy_model
+        else:
+            self.policy_model = PolicyModel(env)
+
+        # Attach or create value model Q(s, a)
+        if value_model:
+            self.value_model = value_model
+        else:
+            self.value_model = RBFRegressionModel(env)
+
+        # Attach or create the optimizer
+        if optimizer:
+            self.optim = optimizer
+        else:
+            self.optim = optim.SGD(self.policy_model.parameters(), lr=lr)
+
+    def play(self, env, gamma=0.9, max_steps=2000, render=False):
+        """ 
+        Play one episode of CartPole. This is a Monte Carlo Method.
+        
+        :param env: Environment object with same interface as OpenAI gym CartPole
+        :param gamma: Discount rate for future rewards
+        :param max_steps: Maximum iterations for an episode. The original 200 max steps of OpenAI Gym is too small
+        :param render: Flag for rendering if needed
+        """
+
+        # Initialize metrics and state for episode
+        s = env.reset()
+        done = False
+        total_rewards = 0
+        step = 0
+
+        # Keep track of (s, a, r) for an episode
+        states = []
+        actions = []
+        rewards = []
+
+        while not done and step < max_steps:
+            action = self.select_action(s)
+            s_prime, reward, done, _ = env.step(action)
+
+            if render:
+                # Render to show play if needed
+                plt.imshow(env.render('rgb_array'))
+
+            # Give a huge negative reward for finishing early
+            # if done:
+            #     reward = -200
+
+            # Keep track of total rewards
+            if reward == 1:
+                total_rewards += reward
+
+            # Record the episode
+            states.append(s)
+            actions.append(action)
+            rewards.append(reward)
+
+            # Don't forget to update state
+            # Or agent won't learn
+            s = s_prime
+            step += 1
+
+        # Collect the returns and difference from value model
+        G = 0
+        returns = []
+        advantages = []
+        for s, a, r in zip(states[::-1], actions[::-1], rewards[::-1]):
+            returns.append(G)
+            advantages.append(G - self.value_model.predict(s)[0])
+            # G = r + gamma * G
+        returns.reverse()
+        advantages.reverse()
+        
+        # # Update the value model
+        # for G, s, a in zip(returns, states, actions):
+        #     self.value_model.update(s, a, G)
+        # Update policy model
+        self.update_policy(states, actions, returns)
+
+        return total_rewards
+
+
+    def select_action(self, obs):
+        """ Select the action to take based on the policy pi(a|s) """
+        action_dist = self.get_policy(obs)
+        return action_dist.sample().item()
+
+    def get_policy(self, obs):
+        """ Obtain pi(a|s) from model """
+        action_logits = self.policy_model(obs)
+        return Categorical(logits=action_logits)
+
+    def update_policy(self, obs, actions, G):
+        """
+        Backpropagation update for policy model pi(a|s)
+
+        :param states: States of an episode
+        :type states: numpy.ndarray
+        :param actions: Actions of an episode
+        :type actions: numpy.ndarray
+        :param G: Either the list of returns or the list of advantages (G - V(s))
+        :type G: numpy.ndarray (numpy.float64)
+        """
+
+        self.optim.zero_grad()
+
+        # Setup tensors
+        action_tensors = torch.as_tensor(actions, dtype=torch.int32)
+        G_tensors = torch.as_tensor(G, dtype=torch.float32)
+
+        # Get trained policy distribution model pi(a|s)
+        policy_dist = self.get_policy(obs)
+        logp = policy_dist.log_prob(action_tensors)
+
+        # Calculate loss
+        loss = -(logp * G_tensors).mean()
+
+        # Optimize
+        loss.backward()
+        self.optim.step()
+
+        return loss

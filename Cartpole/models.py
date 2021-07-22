@@ -1,11 +1,16 @@
 """
 A set of custom models for predicting a Q(s,a) value from a state s
 """
+import torch
+from torch import nn, optim
 import numpy as np
 from sklearn.pipeline import FeatureUnion
 from sklearn.preprocessing import StandardScaler
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import SGDRegressor
+
+from pdb import set_trace as bp
+
 
 class CustomSGDRegressor:
     """
@@ -102,8 +107,59 @@ class RBFRegressionModel:
         X = self._transform(s)
         self.models[a].partial_fit(X, [G])
 
+class PolicyModel(nn.Module):
+    """ A Pytorch model approximation of pi(a|s) for Policy Gradient Method """
 
+    def __init__(self, env):
+        """ Constructor 
+        
+        :param env: Environment object with same interface as OpenAI gym CartPole
+        """
+        super(PolicyModel, self).__init__()
+        
+        # Get sample state for dimensions
+        sample_state = env.observation_space.sample()
+        input_dim = sample_state.shape
 
-       
+        if len(input_dim) > 1:
+            # Raise error because state dimension is wrong
+            raise ValueError("Sample state space dimension expected to be (4,) but got {} instead".format(input_dim))
+
+        # Get size of action space
+        n_actions = env.action_space.n
+
+        # Neural Network
+        self.network = nn.Sequential(
+            nn.Linear(input_dim[0], 16),
+            nn.Tanh(),
+            nn.Linear(16, 32),
+            nn.Tanh(),
+            nn.Linear(32, 64),
+            nn.Tanh(),
+            nn.Linear(64, 32),
+            nn.Tanh(),
+            nn.Linear(32, 16),
+            nn.Tanh(),
+            nn.Linear(16, n_actions),
+            nn.Softmax(-1)
+        )
+
+        # Initialize optimizer
+        self.optim = optim.SGD(self.parameters(), lr=0.1)
+        self.optim.zero_grad()
+
+    def forward(self, s):
+        """ 
+        Forward propagation for policy model pi(a|s)
+        
+        :param s: Input state parameter
+        :type s: numpy.ndarray
+
+        :type return: torch.Tensor (torch.float32)
+        """
+        input_tensor = torch.as_tensor(s, dtype=torch.float32)
+        logits = self.network(input_tensor)
+        return logits
+
 
         

@@ -8,6 +8,7 @@ agents = {path = "."}
 gym = "*"
 telegram-send = "*"
 tqdm = "*"
+jupyter = "*"
 
 [dev-packages]
 
