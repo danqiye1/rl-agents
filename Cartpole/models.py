@@ -130,23 +130,12 @@ class PolicyModel(nn.Module):
 
         # Neural Network
         self.network = nn.Sequential(
-            nn.Linear(input_dim[0], 16),
-            nn.Tanh(),
-            nn.Linear(16, 32),
-            nn.Tanh(),
-            nn.Linear(32, 64),
-            nn.Tanh(),
-            nn.Linear(64, 32),
-            nn.Tanh(),
-            nn.Linear(32, 16),
-            nn.Tanh(),
-            nn.Linear(16, n_actions),
-            nn.Softmax(-1)
+            nn.Linear(input_dim[0], 32),
+            nn.ReLU(),
+            nn.Linear(32, 32),
+            nn.ReLU(),
+            nn.Linear(32, n_actions),
         )
-
-        # Initialize optimizer
-        self.optim = optim.SGD(self.parameters(), lr=0.1)
-        self.optim.zero_grad()
 
     def forward(self, s):
         """ 

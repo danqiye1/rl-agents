@@ -4,7 +4,7 @@ A set of agents for solving the OpenAI Cartpole Environment
 import torch
 import numpy as np
 from matplotlib import pyplot as plt
-from torch import optim
+from torch import optim, nn
 from torch.distributions import Categorical
 from Cartpole.models import RBFRegressionModel, PolicyModel
 
@@ -87,7 +87,7 @@ class QLearningAgent:
 class PolicyGradientAgent:
     """ Agent that learns using Policy Gradient Method """
 
-    def __init__(self, env, policy_model=None, value_model=None, optimizer=None, lr=0.1):
+    def __init__(self, env, policy_model=None, value_model=None, optimizer=None, lr=1e-3):
         """ Constructor 
         
         :param env: Environment object with same interface as OpenAI gym CartPole
@@ -111,7 +111,7 @@ class PolicyGradientAgent:
         if optimizer:
             self.optim = optimizer
         else:
-            self.optim = optim.SGD(self.policy_model.parameters(), lr=lr)
+            self.optim = optim.Adam(self.policy_model.parameters(), lr=lr)
 
     def play(self, env, gamma=0.9, max_steps=2000, render=False):
         """ 
@@ -126,7 +126,7 @@ class PolicyGradientAgent:
         # Initialize metrics and state for episode
         s = env.reset()
         done = False
-        total_rewards = 0
+        # total_rewards = 0
         step = 0
 
         # Keep track of (s, a, r) for an episode
@@ -142,14 +142,6 @@ class PolicyGradientAgent:
                 # Render to show play if needed
                 plt.imshow(env.render('rgb_array'))
 
-            # Give a huge negative reward for finishing early
-            # if done:
-            #     reward = -200
-
-            # Keep track of total rewards
-            if reward == 1:
-                total_rewards += reward
-
             # Record the episode
             states.append(s)
             actions.append(action)
@@ -163,32 +155,26 @@ class PolicyGradientAgent:
         # Collect the returns and difference from value model
         G = 0
         returns = []
-        advantages = []
-        for s, a, r in zip(states[::-1], actions[::-1], rewards[::-1]):
+        for r in rewards[::-1]:
+            G = r + gamma * G
             returns.append(G)
-            advantages.append(G - self.value_model.predict(s)[0])
-            # G = r + gamma * G
         returns.reverse()
-        advantages.reverse()
         
-        # # Update the value model
-        # for G, s, a in zip(returns, states, actions):
-        #     self.value_model.update(s, a, G)
-        # Update policy model
-        self.update_policy(states, actions, returns)
+        loss = self.update_policy(states, actions, returns)
 
-        return total_rewards
+        return loss, sum(rewards)
 
 
     def select_action(self, obs):
         """ Select the action to take based on the policy pi(a|s) """
-        action_dist = self.get_policy(obs)
-        return action_dist.sample().item()
-
-    def get_policy(self, obs):
-        """ Obtain pi(a|s) from model """
         action_logits = self.policy_model(obs)
-        return Categorical(logits=action_logits)
+
+        with torch.no_grad():
+            action_probs = nn.functional.softmax(action_logits, -1)
+        
+        action_probs = action_probs.numpy()
+
+        return np.random.choice(len(action_probs), p=action_probs)
 
     def update_policy(self, obs, actions, G):
         """
@@ -201,21 +187,19 @@ class PolicyGradientAgent:
         :param G: Either the list of returns or the list of advantages (G - V(s))
         :type G: numpy.ndarray (numpy.float64)
         """
-
-        self.optim.zero_grad()
-
         # Setup tensors
-        action_tensors = torch.as_tensor(actions, dtype=torch.int32)
+        action_tensors = nn.functional.one_hot(torch.as_tensor(actions))
         G_tensors = torch.as_tensor(G, dtype=torch.float32)
 
         # Get trained policy distribution model pi(a|s)
-        policy_dist = self.get_policy(obs)
-        logp = policy_dist.log_prob(action_tensors)
+        action_logits = self.policy_model(obs)
+        action_logprob = (nn.functional.log_softmax(action_logits, -1) * action_tensors).sum(1)
 
         # Calculate loss
-        loss = -(logp * G_tensors).mean()
+        loss = -((action_logprob * G_tensors).mean())
 
         # Optimize
+        self.optim.zero_grad()
         loss.backward()
         self.optim.step()
 
