@@ -87,54 +87,42 @@ class QLearningAgent:
 class PolicyGradientAgent:
     """ Agent that learns using Policy Gradient Method """
 
-    def __init__(self, env, policy_model=None, value_model=None, optimizer=None, lr=1e-3):
+    def __init__(self, model, gamma=0.99, optimizer=None, lr=1e-3):
         """ Constructor 
         
-        :param env: Environment object with same interface as OpenAI gym CartPole
-        :param policy_model: Function approximation model that gives pi(a|s)
-        :param value_model: Function apporximation model that gives Q(s, a)
+        :param model: A function approximation model for pi(a|s)
+        :param gamma: Discount factor hyperparameter
+        :param optimizer: A pytorch optimizer
+        :param lr: Learning rate for gradient descent
         """
-
-        # Attach or create policy model pi(a|s)
-        if policy_model:
-            self.policy_model = policy_model
-        else:
-            self.policy_model = PolicyModel(env)
-
-        # Attach or create value model Q(s, a)
-        if value_model:
-            self.value_model = value_model
-        else:
-            self.value_model = RBFRegressionModel(env)
+        self.model = model
+        self.gamma = gamma
 
         # Attach or create the optimizer
         if optimizer:
             self.optim = optimizer
         else:
-            self.optim = optim.Adam(self.policy_model.parameters(), lr=lr)
+            self.optim = optim.Adam(self.model.parameters(), lr=lr)
 
-    def play(self, env, gamma=0.9, max_steps=2000, render=False):
+    def play(self, env, max_steps=2000, render=False):
         """ 
         Play one episode of CartPole. This is a Monte Carlo Method.
         
         :param env: Environment object with same interface as OpenAI gym CartPole
-        :param gamma: Discount rate for future rewards
         :param max_steps: Maximum iterations for an episode. The original 200 max steps of OpenAI Gym is too small
         :param render: Flag for rendering if needed
         """
 
         # Initialize metrics and state for episode
         s = env.reset()
-        done = False
-        # total_rewards = 0
-        step = 0
 
         # Keep track of (s, a, r) for an episode
         states = []
         actions = []
         rewards = []
 
-        while not done and step < max_steps:
+        # while not done and step < max_steps:
+        for _ in range(max_steps):
             action = self.select_action(s)
             s_prime, reward, done, _ = env.step(action)
 
@@ -150,57 +138,55 @@ class PolicyGradientAgent:
             # Don't forget to update state
             # Or agent won't learn
             s = s_prime
-            step += 1
+
+            if done:
+                break
 
         # Collect the returns and difference from value model
         G = 0
         returns = []
         for r in rewards[::-1]:
-            G = r + gamma * G
+            G = r + self.gamma * G
             returns.append(G)
-        returns.reverse()
-        
-        loss = self.update_policy(states, actions, returns)
 
-        return loss, sum(rewards)
+        returns.reverse()
+
+        return states, actions, rewards, returns
 
 
     def select_action(self, obs):
         """ Select the action to take based on the policy pi(a|s) """
-        action_logits = self.policy_model(obs)
-
-        with torch.no_grad():
-            action_probs = nn.functional.softmax(action_logits, -1)
-        
-        action_probs = action_probs.numpy()
-
+        action_probs, _ , _ = self.model(obs)
         return np.random.choice(len(action_probs), p=action_probs)
 
-    def update_policy(self, obs, actions, G):
+    def train(self, states, actions, rewards, returns):
         """
         Backpropagation update for policy model pi(a|s)
 
         :param states: States of an episode
-        :type states: numpy.ndarray
+        :type states: list
         :param actions: Actions of an episode
-        :type actions: numpy.ndarray
-        :param G: Either the list of returns or the list of advantages (G - V(s))
-        :type G: numpy.ndarray (numpy.float64)
+        :type actions: list
+        :param returns: Either the list of returns or the list of advantages (G - V(s))
+        :type returns: list
         """
         # Setup tensors
-        action_tensors = nn.functional.one_hot(torch.as_tensor(actions))
-        G_tensors = torch.as_tensor(G, dtype=torch.float32)
+        states = torch.tensor(states, dtype=torch.float32)
+        actions = torch.tensor(actions)
+        returns = torch.tensor(returns, dtype=torch.float32)
 
         # Get trained policy distribution model pi(a|s)
-        action_logits = self.policy_model(obs)
-        action_logprob = (nn.functional.log_softmax(action_logits, -1) * action_tensors).sum(1)
+        _, action_probs, log_probs = self.model(states)
+
+        # Get the log probability of selected actions
+        log_probs_selected_actions = (log_probs * nn.functional.one_hot(actions)).sum(1)
 
         # Calculate loss
-        loss = -((action_logprob * G_tensors).mean())
+        loss = -(log_probs_selected_actions * returns).mean()
 
         # Optimize
         self.optim.zero_grad()
         loss.backward()
         self.optim.step()
 
-        return loss
+        return np.sum(rewards)
