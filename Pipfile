@@ -4,10 +4,11 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-agents = {path = "."}
 gym = "*"
 telegram-send = "*"
 tqdm = "*"
+jupyter = "*"
+agents = {editable = true, path = "."}
 
 [dev-packages]
 

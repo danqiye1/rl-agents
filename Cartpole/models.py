@@ -1,11 +1,15 @@
 """
 A set of custom models for predicting a Q(s,a) value from a state s
 """
+import torch
+from torch import nn
 import numpy as np
 from sklearn.pipeline import FeatureUnion
 from sklearn.preprocessing import StandardScaler
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import SGDRegressor
+
+from pdb import set_trace as bp
 
 class CustomSGDRegressor:
     """
@@ -102,8 +106,47 @@ class RBFRegressionModel:
         X = self._transform(s)
         self.models[a].partial_fit(X, [G])
 
+class PolicyModel(nn.Module):
+    """ A Pytorch model approximation of pi(a|s) for Policy Gradient Method """
 
+    def __init__(self, n_states, n_actions):
+        """ Constructor 
+        
+        :param n_states: State/observation space of the environment
+        :param n_actions: Action space of the agent
+        """
+        super(PolicyModel, self).__init__()
 
-       
+        # Neural Network
+        self.network = nn.Sequential(
+            nn.Linear(n_states, 32),
+            nn.ReLU(),
+            nn.Linear(32, 32),
+            nn.ReLU(),
+            nn.Linear(32, n_actions),
+        )
+
+    def forward(self, s):
+        """ 
+        Forward propagation for policy model pi(a|s)
+        
+        :param s: Input state of dim [batch_size, n_states]
+        :type s: numpy.ndarray
+
+        :returns:
+            - no_grad_logits - probabilities of each action without gradient (for action selection)
+            - logits - probabilities of each action with gradient (for backpropagation)
+            - log_probs - log probabilities of each action with gradient (for backpropagation)
+        """
+        input_tensor = torch.as_tensor(s, dtype=torch.float32)
+        x = self.network(input_tensor)
+
+        with torch.no_grad():
+            no_grad_logits = nn.functional.softmax(x, -1)
+
+        logits = nn.functional.softmax(x, -1)
+        log_prob = nn.functional.log_softmax(x, -1)
+        return no_grad_logits.numpy(), logits, log_prob
+
 
         
