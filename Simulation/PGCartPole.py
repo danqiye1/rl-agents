@@ -45,7 +45,7 @@ network = Model(env.observation_space.shape[0],env.action_space.n)
 
 class Agent:
 
-    def __init__(self, model, gamma=0.99, learning_rate=1e-3, entropy_coeff=1e-2):
+    def __init__(self, model, gamma=0.99, learning_rate=1e-3, entropy_coeff=0.1):
         self.model = model
         self.gamma = gamma
         self.optimizer = torch.optim.Adam(self.model.parameters(), learning_rate)
@@ -101,8 +101,8 @@ class Agent:
         log_probs_for_actions = (log_probs * nn.functional.one_hot(actions)).sum(1)
 
         # Calculate "loss"
-        entropy = (action_probs*log_probs).sum()
-        loss = -(log_probs_for_actions*returns).mean() + self.entropy_coeff * entropy
+        entropy_reg = -(action_probs*log_probs).mean()
+        loss = -(log_probs_for_actions*returns).mean() - self.entropy_coeff * entropy_reg
 
         # Gradient descent step
         self.optimizer.zero_grad()
