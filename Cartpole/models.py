@@ -1,6 +1,7 @@
 """
 A set of custom models for predicting a Q(s,a) value from a state s
 """
+from sklearn import linear_model
 import torch
 from torch import nn
 import numpy as np
@@ -148,5 +149,48 @@ class PolicyModel(nn.Module):
         log_prob = nn.functional.log_softmax(x, -1)
         return no_grad_logits.numpy(), logits, log_prob
 
+class DeepQNetwork(nn.Module):
+    """
+    Convolution Neural Network used for Deep Q Learning
+    """
 
-        
+    def __init__(self, w, h, c, n_actions):
+        """ Constructor
+
+        :param w: Width of the image of agent state.
+        :param h: Height of the image of agent state.
+        :param c: Number of channels of the image of agent state.
+        :param n_actions: Action space of agent, which is also the number of outputs of network.
+        """
+        super(DeepQNetwork, self).__init__()
+
+        self.ConvNet = nn.Sequential(
+            nn.Conv2d(c, 16, kernel_size=5),
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=5),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, kernel_size=5),
+            nn.BatchNorm2d(32),
+            nn.ReLU()
+        )
+
+        # Hacky way to get the dimensions
+        conv_output = self.ConvNet(torch.rand(1, c, h, w))
+        linear_dim = len(conv_output.view(-1))
+
+        self.LinearNet = nn.Sequential(
+            nn.Linear(linear_dim, linear_dim // 2),
+            nn.ReLU(),
+            nn.Linear(linear_dim // 2, linear_dim // 4),
+            nn.ReLU(),
+            nn.Linear(linear_dim // 4, n_actions)
+        )
+
+    def forward(self, x):
+        """ Forward pass """
+        x = self.ConvNet(x)
+        output = self.LinearNet(x.view(-1))
+
+        return output
